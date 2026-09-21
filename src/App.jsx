@@ -65,7 +65,7 @@ function AdCard({ad,onApprove,onReject}){
         <div className="row"><div className="request-badges"><Badge tone={kind.tone}><KindIcon size={13}/>{kind.label}</Badge>{kind.label!=='VIP баннер'&&(ad.categoryName||ad.category)&&<Badge>{ad.categoryName||ad.category}</Badge>}</div><span className="muted">{ago(ad.createdAt||ad.timestamp||ad.requestedAt)}</span></div>
         <h3>{titleOf(ad)}</h3><p>{ad.description||ad.desc||'Сүрөттөмө берилген эмес'}</p>
         {adImages.length>1&&<div className="mini-gallery">{adImages.slice(0,5).map((src,i)=><button key={`${src}-${i}`} onClick={()=>openAdImage(i)}><img src={src} alt=""/>{i===4&&adImages.length>5?<span>+{adImages.length-5}</span>:null}</button>)}</div>}
-        <div className="request-details"><span><b>Жарнама:</b> {kind.label}</span>{(ad.requestedDays||ad.vipDays||ad.durationDays||ad.days)&&<span><b>Мөөнөт:</b> {ad.requestedDays||ad.vipDays||ad.durationDays||ad.days} күн</span>}{(ad.vipTotalCost||ad.totalPrice||ad.amount)&&<span><b>Төлөм:</b> {money(ad.vipTotalCost||ad.totalPrice||ad.amount)}</span>}</div>
+        <div className="request-details">{(ad.requestedDays||ad.vipDays||ad.durationDays||ad.days)&&<span><b>Мөөнөт:</b> {ad.requestedDays||ad.vipDays||ad.durationDays||ad.days} күн</span>}{(ad.vipTotalCost||ad.totalPrice||ad.amount)&&<span><b>Төлөм:</b> {money(ad.vipTotalCost||ad.totalPrice||ad.amount)}</span>}</div>
         <div className="ad-meta"><b>{money(ad.price||ad.adPrice)}</b><span>{ownerOf(ad)}</span></div>
       </div>
       <div className="request-side">
@@ -115,14 +115,14 @@ const approve=async item=>{
       const requestRef=doc(db,'vip_requests',item.id);
       const snap=await getDoc(requestRef);
       const req=snap.exists()?snap.data():item;
-      const targetId=req.adId||req.targetAdId||req.adDocId||req.vipAdId||req.bannerId||req.sourceAdId||item.adId;
+      const targetId=req.adId||req.targetAdId||req.adDocId||req.vipAdId||req.bannerId||req.sourceAdId||item._linkedAdId;
       if(!targetId)throw new Error('Жарнаманын ID табылган жок');
 
-      const daysN=Math.max(0,Number(req.requestedDays||req.vipDays||req.durationDays||req.days||0));
-      if(daysN<=0)throw new Error('Кошула турган күн туура эмес');
-      const added=daysN*86400000;
+      const daysN=Math.max(0,Math.trunc(Number(req.requestedDays||req.vipDays||req.durationDays||req.days||0)));
+      if(daysN<=0)throw new Error('Узартуу мөөнөтү туура эмес');
+      const added=daysN*24*60*60*1000;
 
-      if(req.requestType==='normal_ad_promotion'){
+      if(req.requestType==='normal_ad_promotion'||req.sourceCollection==='ads'){
         const adRef=doc(db,'ads',targetId);
         const adSnap=await getDoc(adRef);
         if(!adSnap.exists())throw new Error('Жарнама табылган жок');
@@ -134,51 +134,46 @@ const approve=async item=>{
           if(occupied>=3)throw new Error('Бул категорияда VIP TOP үчүн 3 орун толгон');
         }
 
-        const requestedExpiry=toMs(req.newExpiresAt);
-        const currentVipExpiry=toMs(adData.vipUntil);
-        const expiry=requestedExpiry>now
-          ? Math.max(requestedExpiry,currentVipExpiry)
-          : Math.max(currentVipExpiry,now)+added;
+        // Так эреже: учурдагы VIP мөөнөтү бүтө элек болсо ошого,
+        // бүтүп калса бүгүнкү убакытка requestedDays толугу менен кошулат.
+        const currentVipUntil=toMs(adData.vipUntil);
+        const expiry=Math.max(currentVipUntil,now)+added;
 
         await setDoc(adRef,{
           promotionStatus:'active',
           isPromoted:true,
           isPinned:Boolean(req.requestedPinned),
           promotionType:req.requestedPinned?'pinned':'rotating',
-          promotionStartedAt:now,
+          promotionStartedAt:adData.promotionStartedAt||now,
           vipUntil:expiry,
           updatedAt:now
         },{merge:true});
 
         await deleteDoc(requestRef);
-        await writeLog(req.requestedPinned?'Закрепленный VIP кабыл алынды':'VIP жарнама кабыл алынды',`${titleOf(item)} · +${daysN} күн`);
-        flash(`${daysN} күн VIP кошулду`);
+        await writeLog(req.requestedPinned?'Закрепленный VIP узартылды':'VIP жарнама узартылды',`${titleOf(item)} · +${daysN} күн`);
+        flash(`Мөөнөт +${daysN} күнгө узартылды`);
         return;
       }
 
+      // VIP баннер: дал ошол requestedDays expiresAt'ка кошулат.
       const vipRef=doc(db,'vip_ads',targetId);
       const vipSnap=await getDoc(vipRef);
       if(!vipSnap.exists())throw new Error('VIP баннер табылган жок');
       const source=vipSnap.data();
-
-      const requestedExpiry=toMs(req.newExpiresAt);
       const currentExpiry=toMs(source.expiresAt);
-      const expiry=requestedExpiry>now
-        ? Math.max(requestedExpiry,currentExpiry)
-        : Math.max(currentExpiry,now)+added;
+      const expiry=Math.max(currentExpiry,now)+added;
 
       await setDoc(vipRef,{
+        status:'active',
         isVip:true,
-        type:source.type||'vip',
         expiresAt:expiry,
         vipDays:Math.max(0,Number(source.vipDays||0))+daysN,
-        status:'active',
         updatedAt:now
       },{merge:true});
 
       await deleteDoc(requestRef);
       await writeLog('VIP баннер узартылды',`${titleOf(item)} · +${daysN} күн`);
-      flash(`${daysN} күн кошулду`);
+      flash(`Мөөнөт +${daysN} күнгө узартылды`);
       return;
     }
 
@@ -186,13 +181,19 @@ const approve=async item=>{
       const vipRef=doc(db,'vip_ads',item.id);
       const vipSnap=await getDoc(vipRef);
       const source=vipSnap.exists()?vipSnap.data():item;
-      const daysN=Math.max(0,Number(item.vipDays||item.durationDays||item.days||0));
-      const currentExpiry=toMs(source.expiresAt);
-      const expiry=currentExpiry>now?currentExpiry:now+(daysN>0?daysN:1)*86400000;
+      const daysN=Math.max(0,Math.trunc(Number(item.requestedDays||item.vipDays||item.durationDays||item.days||0)));
+      if(daysN<=0)throw new Error('VIP баннердин мөөнөтү көрсөтүлгөн эмес');
+      const expiry=Math.max(toMs(source.expiresAt),now)+daysN*24*60*60*1000;
 
-      await setDoc(vipRef,{status:'active',isVip:true,expiresAt:expiry,updatedAt:now},{merge:true});
-      await writeLog('VIP баннер кабыл алынды',titleOf(item));
-      flash('VIP баннер жарыяланды');
+      await setDoc(vipRef,{
+        status:'active',
+        isVip:true,
+        expiresAt:expiry,
+        vipDays:Math.max(0,Number(source.vipDays||0))+daysN,
+        updatedAt:now
+      },{merge:true});
+      await writeLog('VIP баннер кабыл алынды',`${titleOf(item)} · +${daysN} күн`);
+      flash(`Мөөнөт +${daysN} күнгө узартылды`);
       return;
     }
   }catch(e){
