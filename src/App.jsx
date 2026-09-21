@@ -8,7 +8,17 @@ const ADMIN_EMAILS=(import.meta.env.VITE_ADMIN_EMAILS||import.meta.env.VITE_ADMI
   .split(',').map(email=>email.trim().toLowerCase()).filter(Boolean);
 const isAdminEmail=email=>ADMIN_EMAILS.includes((email||'').trim().toLowerCase());
 
-const pages=[['dashboard','Башкы бет',Home],['ads','Жарнамалар',FileText],['users','Колдонуучулар',Users],['violations','Эрежелер',AlertTriangle],['logout','Чыгуу',LogOut],['logs','Журнал',Clock3],['settings','Жөндөөлөр',Settings]];
+// Менюдагы пункттар тизмеси ("Чыгуу" атайын эң ыңгайлуу жерге коюлду)
+const pages=[
+  ['dashboard','Башкы бет',Home],
+  ['ads','Жарнамалар',FileText],
+  ['users','Колдонуучулар',Users],
+  ['violations','Эрежелер',AlertTriangle],
+  ['logs','Журнал',Clock3],
+  ['settings','Жөндөөлөр',Settings],
+  ['logout','Чыгуу',LogOut]
+];
+
 const asDate=v=>{if(!v)return null;if(v?.toDate)return v.toDate();const d=new Date(typeof v==='number'?v:v?.seconds?v.seconds*1000:v);return isNaN(d)?null:d};
 const toMs=v=>asDate(v)?.getTime?.()||Number(v)||0;
 const ago=v=>{const d=asDate(v);if(!d)return 'азыр';const m=Math.max(0,Math.floor((Date.now()-d)/60000));return m<1?'азыр':m<60?`${m} мүн. мурун`:m<1440?`${Math.floor(m/60)} саат мурун`:`${Math.floor(m/1440)} күн мурун`};
@@ -16,32 +26,304 @@ const money=v=>v?`${Number(v).toLocaleString('ru-RU')} сом`:'Көрсөтүл
 const titleOf=v=>v?.title||v?.adTitle||v?.name||v?.productName||'Жарнама';
 const ownerOf=v=>v?.userName||v?.ownerName||v?.displayName||v?.authorName||v?.email||v?.userEmail||'Белгисиз';
 const imageOf=v=>{const x=Array.isArray(v?.images)?v.images[0]:v?.images;return x||v?.imageUrl||v?.image||v?.photoURL||''};
+
 function Logo({small=false}){return <div className={`logo ${small?'small':''}`}><span>ТБ</span></div>}
 function Badge({children,tone='purple'}){return <span className={`badge ${tone}`}>{children}</span>}
 function Empty({text}){return <div className="empty"><FileText/><b>{text}</b><span>Азырынча көрсөтүлө турган маалымат жок</span></div>}
 function Stat({icon:Icon,label,value,color}){return <article className="stat"><i className={color}><Icon/></i><div><span>{label}</span><strong>{value}</strong></div></article>}
-function AdCard({ad,onApprove,onReject}){const vip=ad._collection!=='ads';return <article className="ad-card"><div className="ad-image">{imageOf(ad)?<img src={imageOf(ad)} alt=""/>:<FileText/>}{vip&&<Badge tone="orange"><Crown size={13}/> VIP</Badge>}</div><div className="ad-info"><div className="row"><Badge>{ad.categoryName||ad.category||'Категориясыз'}</Badge><span className="muted">{ago(ad.createdAt||ad.timestamp)}</span></div><h3>{titleOf(ad)}</h3><p>{ad.description||ad.desc||'Сүрөттөмө берилген эмес'}</p><div className="ad-meta"><b>{money(ad.price||ad.totalPrice||ad.vipTotalCost)}</b><span>{ownerOf(ad)}</span></div></div><div className="ad-actions">{ad._pending&&<button className="approve" onClick={()=>onApprove(ad)}><Check/>Уруксат</button>}<button className="reject" onClick={()=>onReject(ad)}><Trash2/>Өчүрүү</button></div></article>}
-function Dashboard({users,ads,vipAds,pending,logs,setPage}){const blocked=users.filter(u=>u.status==='blocked').length;const today=new Date().toDateString();const newUsers=users.filter(u=>asDate(u.createdAt)?.toDateString()===today).length;const newAds=ads.filter(a=>asDate(a.createdAt||a.timestamp)?.toDateString()===today).length;return <><header className="page-title"><div><h1>Жалпы маалымат</h1><p className="subtitle">Системанын бүгүнкү абалы</p></div></header><section className="stats"><Stat icon={Users} label="Катталган аккаунттар" value={users.length} color="purple"/><Stat icon={FileText} label="Активдүү жарыялар" value={ads.filter(a=>a.status==='approved').length+vipAds.filter(a=>a.status==='active').length} color="violet"/><Stat icon={Clock3} label="Текшерүүдө" value={pending.length} color="orange"/><Stat icon={ShieldCheck} label="Блоктолгондор" value={blocked} color="red"/></section><section className="dashboard-middle"><div className="activity-card"><div className="activity-title">Бүгүнкү активдүүлүк</div><div className="activity-number"><strong>+{newUsers}</strong><small>жаңы колдонуучу</small></div><div className="activity-number"><strong>+{newAds}</strong><small>жаңы жарыя</small></div><svg viewBox="0 0 300 100" preserveAspectRatio="none"><path d="M0 78 C35 36,50 88,85 58 S135 65,160 38 S210 54,240 24 S270 35,300 8"/><circle cx="300" cy="8" r="5"/></svg></div><div className="quick-panel"><h2>Тез башкаруу</h2><button className="quick" onClick={()=>setPage('ads')}><i><FileText/></i><div><b>Жарнамаларды текшерүү</b><span>{pending.length} жарыя чечим күтүп турат</span></div><ChevronRight/></button><button className="quick warning" onClick={()=>setPage('violations')}><i><AlertTriangle/></i><div><b>Эреже бузуулар</b><span>{blocked} жаңы билдирүү</span></div><ChevronRight/></button><button className="quick" onClick={()=>setPage('users')}><i><Users/></i><div><b>Колдонуучулар</b><span>Издөө жана блоктоо</span></div><ChevronRight/></button></div></section><section className="recent"><div className="section-head"><h2>Акыркы аракеттер</h2><button onClick={()=>setPage('logs')}>Баарын көрүү <ChevronRight/></button></div><div className="list-card">{logs.slice(0,5).map(l=><div className="log" key={l.id}><i><Activity/></i><div><b>{l.message||l.action||'Аракет'}</b><span>{l.details||l.adminEmail||'Админ'}</span></div><time>{ago(l.createdAt)}</time></div>)}{!logs.length&&<Empty text="Аракеттер жок"/>}</div></section></>}
-function AdsPage({pending,normal,vip,approve,reject,globalSearch=''}){const[tab,setTab]=useState('pending');const[search,setSearch]=useState('');const data=tab==='pending'?pending:tab==='vip'?vip:normal;const q=(search||globalSearch).trim().toLowerCase();const filtered=data.filter(x=>`${titleOf(x)} ${ownerOf(x)} ${x.categoryName||x.category||''}`.toLowerCase().includes(q));return <><header className="page-title"><div><h1>Жарнамалар</h1><p className="subtitle">Бардык жарыяларды башкаруу</p></div></header><div className="toolbar"><div className="tabs"><button className={tab==='pending'?'active':''} onClick={()=>setTab('pending')}>Текшерүүдө <em>{pending.length}</em></button><button className={tab==='normal'?'active':''} onClick={()=>setTab('normal')}>Кадимки <em>{normal.length}</em></button><button className={tab==='vip'?'active':''} onClick={()=>setTab('vip')}>VIP <em>{vip.length}</em></button></div><label className="search"><Search/><input placeholder="Жарнаманы издөө" value={search} onChange={e=>setSearch(e.target.value)}/></label></div><div className="ad-list">{filtered.map(ad=><AdCard key={`${ad._collection}-${ad.id}`} ad={ad} onApprove={approve} onReject={reject}/>)}{!filtered.length&&<Empty text="Жарнама табылган жок"/>}</div></>}
-function UsersPage({users,onBlock,onUnblock,globalSearch=''}){const[search,setSearch]=useState('');const q=(search||globalSearch).trim().toLowerCase();const filtered=users.filter(u=>`${u.name||u.displayName||''} ${u.email||''} ${u.phone||''}`.toLowerCase().includes(q));return <><header className="page-title"><div><h1>Колдонуучулар</h1><p className="subtitle">Аккаунттарды издөө, текшерүү жана башкаруу</p></div></header><label className="search wide"><Search/><input placeholder="Аты, почтасы же телефону менен издөө" value={search} onChange={e=>setSearch(e.target.value)}/></label><div className="table-card"><div className="table-head"><span>Колдонуучу</span><span>Рейтинг</span><span>Статус</span><span>Катталган</span><span>Аракет</span></div>{filtered.map(u=><div className="user-row" key={u.id}><div className="user"><div className="avatar">{imageOf(u)?<img src={imageOf(u)} alt=""/>:<UserRound/>}</div><div><b>{u.name||u.displayName||'Аты жок'}</b><span>{u.email||u.phone||u.id}</span></div></div><b>{Number(u.rating||0).toFixed(1)}</b><div>{u.status==='blocked'?<Badge tone="red">Блоктолгон</Badge>:<Badge tone="green">Активдүү</Badge>}</div><span>{asDate(u.createdAt)?.toLocaleDateString('ky-KG')||'—'}</span><button className={`outline mini ${u.status==='blocked'?'green':''}`} onClick={()=>u.status==='blocked'?onUnblock(u):onBlock(u)}>{u.status==='blocked'?<Unlock/>:<LockKeyhole/>}{u.status==='blocked'?'Ачуу':'Блоктоо'}</button></div>)}{!filtered.length&&<Empty text="Колдонуучу табылган жок"/>}</div></>}
-function LogsPage({logs,title='Аракеттер журналы'}){return <><header className="page-title"><h1>{title}</h1></header><div className="list-card large">{logs.map(l=><div className="log" key={l.id}><i><Activity/></i><div><b>{l.message||l.action||'Аракет'}</b><span>{l.details||l.adminEmail||'Администратор'}</span></div><time>{ago(l.createdAt)}</time></div>)}{!logs.length&&<Empty text="Журнал бош"/>}</div></>}
-function Modal({title,children,onClose}){return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><h3>{title}</h3>{children}<button className="outline" onClick={onClose}>Жабуу</button></div></div>}
-function AdminApp({authUser}){const[page,setPage]=useState('dashboard'),[notice,setNotice]=useState(''),[error,setError]=useState(''),[globalSearch,setGlobalSearch]=useState('');const[ads,setAds]=useState([]),[vipAds,setVipAds]=useState([]),[requests,setRequests]=useState([]),[users,setUsers]=useState([]),[logs,setLogs]=useState([]),[reports,setReports]=useState([]);const[blockTarget,setBlockTarget]=useState(null),[reason,setReason]=useState('Эрежени бузган'),[days,setDays]=useState(3);
-useEffect(()=>{if(page==='logout')signOut(auth)},[page]);
-useEffect(()=>{const bind=(name,setter)=>onSnapshot(collection(db,name),s=>{setter(s.docs.map(d=>({id:d.id,docId:d.id,_collection:name,...d.data()})));setError('')},e=>setError(`Firebase: ${e.message}`));const stops=[bind('ads',setAds),bind('vip_ads',setVipAds),bind('vip_requests',setRequests),bind('users',setUsers),bind('admin_logs',setLogs),bind('reports',setReports)];return()=>stops.forEach(x=>x())},[]);
-const pending=useMemo(()=>[...ads.filter(a=>a.status==='pending'||!a.status).map(a=>({...a,_pending:true})),...vipAds.filter(a=>a.status==='pending'||a.status==='pending_approval'||!a.status).map(a=>({...a,_pending:true})),...requests.filter(r=>r.status!=='approved').map(r=>({...r,_pending:true}))],[ads,vipAds,requests]);
-const normal=ads.filter(a=>a.status==='approved'||(a.status!=='pending'&&!a.isVip&&a.type!=='vip'));const vip=useMemo(()=>[...vipAds.filter(a=>a.status==='active'),...ads.filter(a=>a.promotionStatus==='active'&&toMs(a.vipUntil||a.expiresAt)>Date.now())],[vipAds,ads]);const sortedLogs=[...logs].sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));const flash=s=>{setNotice(s);setTimeout(()=>setNotice(''),2800)};
-const writeLog=async(action,details)=>{try{await setDoc(doc(collection(db,'admin_logs')),{action,message:action,details,adminEmail:authUser?.email||ADMIN_EMAILS[0],createdAt:serverTimestamp()})}catch{}};
-const approve=async item=>{try{if(item._collection==='ads'){await updateDoc(doc(db,'ads',item.id),{status:'approved'});await writeLog('Жарнама кабыл алынды',titleOf(item));flash('Жарнама жарыяланды');return}const now=Date.now(),daysN=Number(item.requestedDays||item.vipDays||item.durationDays||item.days||0),added=daysN*86400000,targetId=item.adId||item.id;if(item._collection==='vip_requests'){const snap=await getDoc(doc(db,'vip_requests',item.id));const req=snap.exists()?snap.data():item;if(req.requestType==='normal_ad_promotion'){const adRef=doc(db,'ads',targetId),adSnap=await getDoc(adRef);if(!adSnap.exists())throw new Error('Жарнама табылган жок');const adData=adSnap.data(),category=req.categoryKey||adData.categoryKey||adData.category||'other';if(req.requestedPinned){const occupied=ads.filter(x=>x.id!==targetId&&x.promotionStatus==='active'&&x.isPinned===true&&(x.categoryKey||x.category||'other')===category&&toMs(x.vipUntil||x.expiresAt)>now).length;if(occupied>=3)throw new Error('Бул категорияда VIP TOP үчүн 3 орун толгон')}const expiry=Math.max(toMs(adData.vipUntil||adData.expiresAt),now)+added;await setDoc(adRef,{promotionStatus:'active',isPromoted:true,isPinned:Boolean(req.requestedPinned),promotionType:req.requestedPinned?'pinned':'rotating',promotionStartedAt:now,vipUntil:expiry,expiresAt:expiry,updatedAt:now},{merge:true});await deleteDoc(doc(db,'vip_requests',item.id));flash('VIP иштетилди');return}}
-let source=item;const vipRef=doc(db,'vip_ads',targetId),vipSnap=await getDoc(vipRef);if(vipSnap.exists())source=vipSnap.data();const expiry=Math.max(toMs(source.expiresAt),now)+added;await setDoc(vipRef,{...source,isVip:true,type:'vip',expiresAt:expiry,status:'active',updatedAt:now},{merge:true});if(item._collection==='vip_requests')await deleteDoc(doc(db,'vip_requests',item.id));await writeLog('VIP кабыл алынды',titleOf(item));flash('VIP сурам бекитилди')}catch(e){flash(`Ката: ${e.message}`)}};
-const reject=async item=>{if(!confirm(`«${titleOf(item)}» жарнамасын толугу менен өчүрөсүзбү?`))return;try{await deleteDoc(doc(db,item._collection,item.id));await writeLog('Жарнама өчүрүлдү',titleOf(item));flash('Жарнама өчүрүлдү')}catch(e){flash(`Ката: ${e.message}`)}};
-const block=async()=>{try{await setDoc(doc(db,'users',blockTarget.id),{status:'blocked',blockedUntil:Date.now()+Number(days)*86400000,blockReason:reason,warningCount:increment(1),updatedAt:serverTimestamp()},{merge:true});setBlockTarget(null);flash('Колдонуучу блоктолду')}catch(e){flash(`Ката: ${e.message}`)}};const unblock=async u=>{try{await setDoc(doc(db,'users',u.id),{status:'active',blockedUntil:null,blockReason:null,updatedAt:serverTimestamp()},{merge:true});flash('Аккаунт ачылды')}catch(e){flash(`Ката: ${e.message}`)}};
-return <div className="app"><aside><div className="brand"><Logo/><div><b>Токтогул Базар</b><span>Админ-панель</span></div></div><nav>{pages.map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setGlobalSearch('')}}><Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}</button>)}</nav><div className="admin"><div className="avatar"><UserRound/></div><div><b>Администратор</b><span>{authUser?.email}</span></div><button className="logout-mini" title="Чыгуу" onClick={()=>signOut(auth)}><LogOut/></button></div></aside><section className="workspace"><div className="topbar"><div className="mobile-brand"><Logo small/><div><b>Админ-панель</b><span>Токтогул Базар</span></div></div><label className="top-search"><Search/><input placeholder="Жарнама же колдонуучу издөө" value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} onFocus={()=>page==='dashboard'&&setPage('ads')}/></label><div className="top-actions"><button className="icon" title="Текшерүүдөгү жарыялар" onClick={()=>setPage('ads')}><Bell/>{pending.length>0&&<i/>}</button><button className="avatar avatar-button" title="Жөндөөлөр" onClick={()=>setPage('settings')}><UserRound/></button></div></div><main>{error&&<div className="error firebase-error"><AlertTriangle/>{error}</div>}{page==='dashboard'&&<Dashboard users={users} ads={ads} vipAds={vipAds} pending={pending} logs={sortedLogs} setPage={setPage}/>} {page==='ads'&&<AdsPage pending={pending} normal={normal} vip={vip} approve={approve} reject={reject} globalSearch={globalSearch}/>} {page==='users'&&<UsersPage users={users} onBlock={setBlockTarget} onUnblock={unblock} globalSearch={globalSearch}/>} {page==='violations'&&<LogsPage title="Эреже бузуулар" logs={reports.length?reports:sortedLogs.filter(l=>/блок|өчүр|эреже/i.test(`${l.action} ${l.details}`))}/>} {page==='logs'&&<LogsPage logs={sortedLogs}/>} {page==='settings'&&<><header className="page-title"><div><h1>Жөндөөлөр</h1><p className="subtitle">Админ аккаунту жана система</p></div></header><div className="settings-grid"><div className="settings-card"><ShieldCheck/><div><h3>Firebase байланыш</h3><p>reklamakg-73685</p><span>Firestore менен реалдуу убакытта байланышкан.</span></div></div><div className="settings-card"><UserRound/><div><h3>Администратор</h3><p>{authUser?.email}</p><button className="signout-button" onClick={()=>signOut(auth)}><LogOut/>Аккаунттан чыгуу</button></div></div></div></>}</main></section><nav className="bottom-nav">{pages.slice(0,5).map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setGlobalSearch('')}}><Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}</button>)}</nav>{notice&&<div className="toast">{notice}</div>}{blockTarget&&<Modal title="Убактылуу блоктоо" onClose={()=>setBlockTarget(null)}><label>Мөөнөт<select value={days} onChange={e=>setDays(e.target.value)}><option value="1">1 күн</option><option value="3">3 күн</option><option value="7">7 күн</option><option value="30">30 күн</option></select></label><label>Себеби<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><button className="danger" onClick={block}><LockKeyhole/>Блоктоо</button></Modal>}</div>}
+
+function AdCard({ad,onApprove,onReject}){
+  const vip=ad._collection!=='ads';
+  return <article className="ad-card">
+    <div className="ad-image">{imageOf(ad)?<img src={imageOf(ad)} alt=""/>:<FileText/>}{vip&&<Badge tone="orange"><Crown size={13}/> VIP</Badge>}</div>
+    <div className="ad-info">
+      <div className="row"><Badge>{ad.categoryName||ad.category||'Категориясыз'}</Badge><span className="muted">{ago(ad.createdAt||ad.timestamp)}</span></div>
+      <h3>{titleOf(ad)}</h3>
+      <p>{ad.description||ad.desc||'Сүрөттөмө берилген эмес'}</p>
+      <div className="ad-meta"><b>{money(ad.price||ad.totalPrice||ad.vipTotalCost)}</b><span>{ownerOf(ad)}</span></div>
+    </div>
+    <div className="ad-actions">
+      {ad._pending&&<button className="approve" onClick={()=>onApprove(ad)}><Check/>Уруксат</button>}
+      <button className="reject" onClick={()=>onReject(ad)}><Trash2/>Өчүрүү</button>
+    </div>
+  </article>;
+}
+
+function Dashboard({users,ads,vipAds,pending,logs,setPage}){
+  const blocked=users.filter(u=>u.status==='blocked').length;
+  const today=new Date().toDateString();
+  const newUsers=users.filter(u=>asDate(u.createdAt)?.toDateString()===today).length;
+  const newAds=ads.filter(a=>asDate(a.createdAt||a.timestamp)?.toDateString()===today).length;
+  return <>
+    <header className="page-title"><div><h1>Жалпы маалымат</h1><p className="subtitle">Системанын бүгүнкү абалы</p></div></header>
+    <section className="stats">
+      <Stat icon={Users} label="Катталган аккаунттар" value={users.length} color="purple"/>
+      <Stat icon={FileText} label="Активдүү жарыялар" value={ads.filter(a=>a.status==='approved').length+vipAds.filter(a=>a.status==='active').length} color="violet"/>
+      <Stat icon={Clock3} label="Текшерүүдө" value={pending.length} color="orange"/>
+      <Stat icon={ShieldCheck} label="Блоктолгондор" value={blocked} color="red"/>
+    </section>
+    <section className="dashboard-middle">
+      <div className="activity-card">
+        <div className="activity-title">Бүгүнкү активдүүлүк</div>
+        <div className="activity-number"><strong>+{newUsers}</strong><small>жаңы колдонуучу</small></div>
+        <div className="activity-number"><strong>+{newAds}</strong><small>жаңы жарыя</small></div>
+        <svg viewBox="0 0 300 100" preserveAspectRatio="none"><path d="M0 78 C35 36,50 88,85 58 S135 65,160 38 S210 54,240 24 S270 35,300 8"/><circle cx="300" cy="8" r="5"/></svg>
+      </div>
+      <div className="quick-panel">
+        <h2>Тез башкаруу</h2>
+        <button className="quick" onClick={()=>setPage('ads')}><i><FileText/></i><div><b>Жарнамаларды текшерүү</b><span>{pending.length} жарыя чечим күтүп турат</span></div><ChevronRight/></button>
+        <button className="quick warning" onClick={()=>setPage('violations')}><i><AlertTriangle/></i><div><b>Эреже бузуулар</b><span>{blocked} жаңы билдирүү</span></div><ChevronRight/></button>
+        <button className="quick" onClick={()=>setPage('users')}><i><Users/></i><div><b>Колдонуучулар</b><span>Издөө жана блоктоо</span></div><ChevronRight/></button>
+      </div>
+    </section>
+    <section className="recent">
+      <div className="section-head"><h2>Акыркы аракеттер</h2><button onClick={()=>setPage('logs')}>Баарын көрүү <ChevronRight/></button></div>
+      <div className="list-card">
+        {logs.slice(0,5).map(l=><div className="log" key={l.id}><i><Activity/></i><div><b>{l.message||l.action||'Аракет'}</b><span>{l.details||l.adminEmail||'Админ'}</span></div><time>{ago(l.createdAt)}</time></div>)}
+        {!logs.length&&<Empty text="Аракеттер жок"/>}
+      </div>
+    </section>
+  </>;
+}
+
+function AdsPage({pending,normal,vip,approve,reject,globalSearch=''}){
+  const[tab,setTab]=useState('pending');
+  const[search,setSearch]=useState('');
+  const data=tab==='pending'?pending:tab==='vip'?vip:normal;
+  const q=(search||globalSearch).trim().toLowerCase();
+  const filtered=data.filter(x=>`${titleOf(x)} ${ownerOf(x)} ${x.categoryName||x.category||''}`.toLowerCase().includes(q));
+  return <>
+    <header className="page-title"><div><h1>Жарнамалар</h1><p className="subtitle">Бардык жарыяларды башкаруу</p></div></header>
+    <div className="toolbar">
+      <div className="tabs">
+        <button className={tab==='pending'?'active':''} onClick={()=>setTab('pending')}>Текшерүүдө <em>{pending.length}</em></button>
+        <button className={tab==='normal'?'active':''} onClick={()=>setTab('normal')}>Кадимки <em>{normal.length}</em></button>
+        <button className={tab==='vip'?'active':''} onClick={()=>setTab('vip')}>VIP <em>{vip.length}</em></button>
+      </div>
+      <label className="search"><Search/><input placeholder="Жарнаманы издөө" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+    </div>
+    <div className="ad-list">
+      {filtered.map(ad=><AdCard key={`${ad._collection}-${ad.id}`} ad={ad} onApprove={approve} onReject={reject}/>)}
+      {!filtered.length&&<Empty text="Жарнама табылган жок"/>}
+    </div>
+  </>;
+}
+
+function UsersPage({users,onBlock,onUnblock,globalSearch=''}){
+  const[search,setSearch]=useState('');
+  const q=(search||globalSearch).trim().toLowerCase();
+  const filtered=users.filter(u=>`${u.name||u.displayName||''} ${u.email||''} ${u.phone||''}`.toLowerCase().includes(q));
+  return <>
+    <header className="page-title"><div><h1>Колдонуучулар</h1><p className="subtitle">Аккаунттарды издөө, текшерүү жана башкаруу</p></div></header>
+    <label className="search wide"><Search/><input placeholder="Аты, почтасы же телефону менен издөө" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+    <div className="table-card">
+      <div className="table-head"><span>Колдонуучу</span><span>Рейтинг</span><span>Статус</span><span>Катталган</span><span>Аракет</span></div>
+      {filtered.map(u=><div className="user-row" key={u.id}>
+        <div className="user"><div className="avatar">{imageOf(u)?<img src={imageOf(u)} alt=""/>:<UserRound/>}</div><div><b>{u.name||u.displayName||'Аты жок'}</b><span>{u.email||u.phone||u.id}</span></div></div>
+        <b>{Number(u.rating||0).toFixed(1)}</b>
+        <div>{u.status==='blocked'?<Badge tone="red">Блоктолгон</Badge>:<Badge tone="green">Активдүү</Badge>}</div>
+        <span>{asDate(u.createdAt)?.toLocaleDateString('ky-KG')||'—'}</span>
+        <button className={`outline mini ${u.status==='blocked'?'green':''}`} onClick={()=>u.status==='blocked'?onUnblock(u):onBlock(u)}>{u.status==='blocked'?<Unlock/>:<LockKeyhole/>}{u.status==='blocked'?'Ачуу':'Блоктоо'}</button>
+      </div>)}
+      {!filtered.length&&<Empty text="Колдонуучу табылган жок"/>}
+    </div>
+  </>;
+}
+
+function LogsPage({logs,title='Аракеттер журналы'}){
+  return <>
+    <header className="page-title"><h1>{title}</h1></header>
+    <div className="list-card large">
+      {logs.map(l=><div className="log" key={l.id}><i><Activity/></i><div><b>{l.message||l.action||'Аракет'}</b><span>{l.details||l.adminEmail||'Администратор'}</span></div><time>{ago(l.createdAt)}</time></div>)}
+      {!logs.length&&<Empty text="Журнал бош"/>}
+    </div>
+  </>;
+}
+
+function Modal({title,children,onClose}){
+  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><h3>{title}</h3>{children}<button className="outline" onClick={onClose}>Жабуу</button></div></div>;
+}
+
+function AdminApp({authUser}){
+  const[page,setPage]=useState('dashboard'),[notice,setNotice]=useState(''),[error,setError]=useState(''),[globalSearch,setGlobalSearch]=useState('');
+  const[ads,setAds]=useState([]),[vipAds,setVipAds]=useState([]),[requests,setRequests]=useState([]),[users,setUsers]=useState([]),[logs,setLogs]=useState([]),[reports,setReports]=useState([]);
+  const[blockTarget,setBlockTarget]=useState(null),[reason,setReason]=useState('Эрежени бузган'),[days,setDays]=useState(3);
+
+  // Чыгуу баскычы басылганда аткарылуучу аракет
+  useEffect(()=>{
+    if(page==='logout'){
+      signOut(auth);
+    }
+  },[page]);
+
+  useEffect(()=>{
+    const bind=(name,setter)=>onSnapshot(collection(db,name),s=>{setter(s.docs.map(d=>({id:d.id,docId:d.id,_collection:name,...d.data()})));setError('')},e=>setError(`Firebase: ${e.message}`));
+    const stops=[bind('ads',setAds),bind('vip_ads',setVipAds),bind('vip_requests',setRequests),bind('users',setUsers),bind('admin_logs',setLogs),bind('reports',setReports)];
+    return()=>stops.forEach(x=>x());
+  },[]);
+
+  const pending=useMemo(()=>[
+    ...ads.filter(a=>a.status==='pending'||!a.status).map(a=>({...a,_pending:true})),
+    ...vipAds.filter(a=>a.status==='pending'||a.status==='pending_approval'||!a.status).map(a=>({...a,_pending:true})),
+    ...requests.filter(r=>r.status!=='approved').map(r=>({...r,_pending:true}))
+  ],[ads,vipAds,requests]);
+
+  const normal=ads.filter(a=>a.status==='approved'||(a.status!=='pending'&&!a.isVip&&a.type!=='vip'));
+  const vip=useMemo(()=>[...vipAds.filter(a=>a.status==='active'),...ads.filter(a=>a.promotionStatus==='active'&&toMs(a.vipUntil||a.expiresAt)>Date.now())],[vipAds,ads]);
+  const sortedLogs=[...logs].sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));
+  const flash=s=>{setNotice(s);setTimeout(()=>setNotice(''),2800)};
+  const writeLog=async(action,details)=>{try{await setDoc(doc(collection(db,'admin_logs')),{action,message:action,details,adminEmail:authUser?.email||ADMIN_EMAILS[0],createdAt:serverTimestamp()})}catch{}};
+  
+  const approve=async item=>{
+    try{
+      if(item._collection==='ads'){
+        await updateDoc(doc(db,'ads',item.id),{status:'approved'});
+        await writeLog('Жарнама кабыл алынды',titleOf(item));
+        flash('Жарнама жарыяланды');
+        return;
+      }
+      const now=Date.now(),daysN=Number(item.requestedDays||item.vipDays||item.durationDays||item.days||0),added=daysN*86400000,targetId=item.adId||item.id;
+      if(item._collection==='vip_requests'){
+        const snap=await getDoc(doc(db,'vip_requests',item.id));
+        const req=snap.exists()?snap.data():item;
+        if(req.requestType==='normal_ad_promotion'){
+          const adRef=doc(db,'ads',targetId),adSnap=await getDoc(adRef);
+          if(!adSnap.exists())throw new Error('Жарнама табылган жок');
+          const adData=adSnap.data(),category=req.categoryKey||adData.categoryKey||adData.category||'other';
+          if(req.requestedPinned){
+            const occupied=ads.filter(x=>x.id!==targetId&&x.promotionStatus==='active'&&x.isPinned===true&&(x.categoryKey||x.category||'other')===category&&toMs(x.vipUntil||x.expiresAt)>now).length;
+            if(occupied>=3)throw new Error('Бул категорияда VIP TOP үчүн 3 орун толгон');
+          }
+          const expiry=Math.max(toMs(adData.vipUntil||adData.expiresAt),now)+added;
+          await setDoc(adRef,{promotionStatus:'active',isPromoted:true,isPinned:Boolean(req.requestedPinned),promotionType:req.requestedPinned?'pinned':'rotating',promotionStartedAt:now,vipUntil:expiry,expiresAt:expiry,updatedAt:now},{merge:true});
+          await deleteDoc(doc(db,'vip_requests',item.id));
+          flash('VIP иштетилди');
+          return;
+        }
+      }
+      let source=item;
+      const vipRef=doc(db,'vip_ads',targetId),vipSnap=await getDoc(vipRef);
+      if(vipSnap.exists())source=vipSnap.data();
+      const expiry=Math.max(toMs(source.expiresAt),now)+added;
+      await setDoc(vipRef,{...source,isVip:true,type:'vip',expiresAt:expiry,status:'active',updatedAt:now},{merge:true});
+      if(item._collection==='vip_requests')await deleteDoc(doc(db,'vip_requests',item.id));
+      await writeLog('VIP кабыл алынды',titleOf(item));
+      flash('VIP сурам бекитилди');
+    }catch(e){flash(`Ката: ${e.message}`)}
+  };
+
+  const reject=async item=>{
+    if(!confirm(`«${titleOf(item)}» жарнамасын толугу менен өчүрөсүзбү?`))return;
+    try{
+      await deleteDoc(doc(db,item._collection,item.id));
+      await writeLog('Жарнама өчүрүлдү',titleOf(item));
+      flash('Жарнама өчүрүлдү');
+    }catch(e){flash(`Ката: ${e.message}`)}
+  };
+
+  const block=async()=>{
+    try{
+      await setDoc(doc(db,'users',blockTarget.id),{status:'blocked',blockedUntil:Date.now()+Number(days)*86400000,blockReason:reason,warningCount:increment(1),updatedAt:serverTimestamp()},{merge:true});
+      setBlockTarget(null);
+      flash('Колдонуучу блоктолду');
+    }catch(e){flash(`Ката: ${e.message}`)}
+  };
+
+  const unblock=async u=>{
+    try{
+      await setDoc(doc(db,'users',u.id),{status:'active',blockedUntil:null,blockReason:null,updatedAt:serverTimestamp()},{merge:true});
+      flash('Аккаунт ачылды');
+    }catch(e){flash(`Ката: ${e.message}`)}
+  };
+
+  return <div className="app">
+    <aside>
+      <div className="brand"><Logo/><div><b>Токтогул Базар</b><span>Админ-панель</span></div></div>
+      <nav>
+        {pages.map(([id,label,Icon])=>{
+          const isLogout = id==='logout';
+          return <button key={id} className={`${page===id?'active':''} ${isLogout?'logout-nav-btn':''}`} onClick={()=>{setPage(id);setGlobalSearch('')}}>
+            <Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}
+          </button>;
+        })}
+      </nav>
+      <div className="admin">
+        <div className="avatar"><UserRound/></div>
+        <div><b>Администратор</b><span>{authUser?.email}</span></div>
+        <button className="logout-mini" title="Чыгуу" onClick={()=>signOut(auth)}><LogOut/></button>
+      </div>
+    </aside>
+
+    <section className="workspace">
+      <div className="topbar">
+        <div className="mobile-brand"><Logo small/><div><b>Админ-панель</b><span>Токтогул Базар</span></div></div>
+        <label className="top-search"><Search/><input placeholder="Жарнама же колдонуучу издөө" value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} onFocus={()=>page==='dashboard'&&setPage('ads')}/></label>
+        <div className="top-actions">
+          <button className="icon" title="Текшерүүдөгү жарыялар" onClick={()=>setPage('ads')}><Bell/>{pending.length>0&&<i/>}</button>
+          <button className="avatar avatar-button" title="Жөндөөлөр" onClick={()=>setPage('settings')}><UserRound/></button>
+        </div>
+      </div>
+      
+      <main>
+        {error&&<div className="error firebase-error"><AlertTriangle/>{error}</div>}
+        {page==='dashboard'&&<Dashboard users={users} ads={ads} vipAds={vipAds} pending={pending} logs={sortedLogs} setPage={setPage}/>}
+        {page==='ads'&&<AdsPage pending={pending} normal={normal} vip={vip} approve={approve} reject={reject} globalSearch={globalSearch}/>}
+        {page==='users'&&<UsersPage users={users} onBlock={setBlockTarget} onUnblock={unblock} globalSearch={globalSearch}/>}
+        {page==='violations'&&<LogsPage title="Эреже бузуулар" logs={reports.length?reports:sortedLogs.filter(l=>/блок|өчүр|эреже/i.test(`${l.action} ${l.details}`))}/>}
+        {page==='logs'&&<LogsPage logs={sortedLogs}/>}
+        {page==='settings'&&<><header className="page-title"><div><h1>Жөндөөлөр</h1><p className="subtitle">Админ аккаунту жана система</p></div></header><div className="settings-grid"><div className="settings-card"><ShieldCheck/><div><h3>Firebase байланыш</h3><p>reklamakg-73685</p><span>Firestore менен реалдуу убакытта байланышкан.</span></div></div><div className="settings-card"><UserRound/><div><h3>Администратор</h3><p>{authUser?.email}</p><button className="signout-button" onClick={()=>signOut(auth)}><LogOut/>Аккаунттан чыгуу</button></div></div></div></>}
+      </main>
+    </section>
+
+    {/* Мобилдик экраны үчүн ылдыйкы меню (5 туура элемент, анын ичинде акыркысы - Чыгуу) */}
+    <nav className="bottom-nav">
+      {pages.slice(0,5).map(([id,label,Icon])=>{
+        const isLogout = id==='logout';
+        return <button key={id} className={`${page===id?'active':''} ${isLogout?'logout-bottom-btn':''}`} onClick={()=>{setPage(id);setGlobalSearch('')}}>
+          <Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}
+        </button>;
+      })}
+    </nav>
+
+    {notice&&<div className="toast">{notice}</div>}
+    {blockTarget&&<Modal title="Убактылуу блоктоо" onClose={()=>setBlockTarget(null)}>
+      <label>Мөөнөт<select value={days} onChange={e=>setDays(e.target.value)}><option value="1">1 күн</option><option value="3">3 күн</option><option value="7">7 күн</option><option value="30">30 күн</option></select></label>
+      <label>Себеби<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label>
+      <button className="danger" onClick={block}><LockKeyhole/>Блоктоо</button>
+    </Modal>}
+  </div>;
+}
 
 function LoginScreen(){
   const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[loading,setLoading]=useState(false),[message,setMessage]=useState('');
-  const submit=async e=>{e.preventDefault();setMessage('');if(!isAdminEmail(email)){setMessage('Бул почта администратор катары катталган эмес.');return}try{setLoading(true);await signInWithEmailAndPassword(auth,email.trim(),password)}catch(err){const code=err?.code||'';setMessage(code.includes('invalid-credential')?'Почта же сырсөз туура эмес.':'Кирүүдө ката кетти. Интернетти жана Firebase Authentication бөлүмүн текшериңиз.')}finally{setLoading(false)}};
-  return <div className="login-shell"><section className="login-brand"><div className="login-orb one"/><div className="login-orb two"/><Logo/><h1>Токтогул Базар</h1><p>Жарыяларды, колдонуучуларды жана эрежелерди бир жерден коопсуз башкарыңыз.</p><div className="login-feature"><ShieldCheck/><span>Firebase менен корголгон админ-панель</span></div></section><form className="login-card" onSubmit={submit}><div className="mobile-login-logo"><Logo/></div><Badge>АДМИН КИРҮҮ</Badge><h2>Кош келиңиз!</h2><p className="muted">Башкаруу панелине кирүү үчүн маалыматтарыңызды жазыңыз.</p>{message&&<div className="error"><AlertTriangle/>{message}</div>}<label>Электрондук почта<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="admin@gmail.com" required/></label><label>Сырсөз<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Сырсөзүңүз" required/></label><button className="primary" disabled={loading}>{loading?<><LoaderCircle className="spin"/> Кирип жатат...</>:<>Кирүү <ChevronRight/></>}</button><div className="admin-hint"><ShieldCheck/><span>{ADMIN_EMAILS.length} администраторго кирүүгө уруксат берилген</span></div></form></div>
+  const submit=async e=>{
+    e.preventDefault();
+    setMessage('');
+    if(!isAdminEmail(email)){setMessage('Бул почта администратор катары катталган эмес.');return;}
+    try{
+      setLoading(true);
+      await signInWithEmailAndPassword(auth,email.trim(),password);
+    }catch(err){
+      const code=err?.code||'';
+      setMessage(code.includes('invalid-credential')?'Почта же сырсөз туура эмес.':'Кирүүдө ката кетти. Интернетти жана Firebase Authentication бөлүмүн текшериңиз.');
+    }finally{
+      setLoading(false);
+    }
+  };
+  return <div className="login-shell">
+    <section className="login-brand"><div className="login-orb one"/><div className="login-orb two"/><Logo/><h1>Токтогул Базар</h1><p>Жарыяларды, колдонуучуларды жана эрежелерди бир жерден коопсуз башкарыңыз.</p><div className="login-feature"><ShieldCheck/><span>Firebase менен корголгон админ-панель</span></div></section>
+    <form className="login-card" onSubmit={submit}>
+      <div className="mobile-login-logo"><Logo/></div>
+      <Badge>АДМИН КИРҮҮ</Badge>
+      <h2>Кош келиңиз!</h2>
+      <p className="muted">Башкаруу панелине кирүү үчүн маалыматтарыңызды жазыңыз.</p>
+      {message&&<div className="error"><AlertTriangle/>{message}</div>}
+      <label>Электрондук почта<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="admin@gmail.com" required/></label>
+      <label>Сырсөз<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Сырсөзүңүз" required/></label>
+      <button className="primary" disabled={loading}>{loading?<><LoaderCircle className="spin"/> Кирип жатат...</>:<>Кирүү <ChevronRight/></>}</button>
+      <div className="admin-hint"><ShieldCheck/><span>{ADMIN_EMAILS.length} администраторго кирүүгө уруксат берилген</span></div>
+    </form>
+  </div>;
 }
 
 export default function App(){
