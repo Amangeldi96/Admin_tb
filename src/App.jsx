@@ -106,6 +106,25 @@ const pending=useMemo(()=>[
 ],[ads,vipAds,requests]);
 const normal=ads.filter(a=>a.status==='approved'||(a.status!=='pending'&&!a.isVip&&a.type!=='vip'));const vip=useMemo(()=>[...vipAds.filter(a=>a.status==='active'),...ads.filter(a=>a.promotionStatus==='active'&&toMs(a.vipUntil||a.expiresAt)>Date.now())],[vipAds,ads]);const sortedLogs=[...logs].sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));const flash=s=>{setNotice(s);setTimeout(()=>setNotice(''),2800)};
 const writeLog=async(action,details)=>{try{await setDoc(doc(collection(db,'admin_logs')),{action,message:action,details,adminEmail:authUser?.email||ADMIN_EMAILS[0],createdAt:serverTimestamp()})}catch{}};
+const deleteUrlsOf=v=>{
+  const raw=[
+    v?.imageDeleteUrls,
+    v?.imgbbDeleteUrls,
+    v?.deleteUrls,
+    v?.imageDeleteUrl,
+    v?.imgbbDeleteUrl,
+    v?.deleteUrl
+  ];
+  const out=[];
+  raw.forEach(value=>{
+    (Array.isArray(value)?value:[value]).forEach(url=>{
+      if(typeof url==='string'&&url.trim()&&!out.includes(url.trim()))out.push(url.trim());
+    });
+  });
+  return out;
+};
+const receiptDeleteUrlOf=v=>v?.receiptDeleteUrl||v?.paymentReceiptDeleteUrl||v?.checkDeleteUrl||v?.paymentProofDeleteUrl||'';
+
 const cleanupImgBB=async(deleteUrl)=>{
   if(!deleteUrl)return {ok:false,reason:'delete_url жок'};
   try{
@@ -115,6 +134,29 @@ const cleanupImgBB=async(deleteUrl)=>{
     return {ok:res.ok,reason:res.ok?'delete_url ачылды':`HTTP ${res.status}`};
   }catch(e){
     return {ok:false,reason:e?.message||'ImgBB cleanup error'};
+  }
+};
+
+const cleanupOrQueue=async({deleteUrl,kind,sourceId,adId})=>{
+  if(!deleteUrl)return;
+  const cleanup=await cleanupImgBB(deleteUrl);
+  if(!cleanup.ok){
+    const safeId=`${sourceId||adId||'cleanup'}_${kind}_${Math.random().toString(36).slice(2,9)}`;
+    await setDoc(doc(db,'imgbb_cleanup',safeId),{
+      kind,
+      deleteUrl,
+      sourceRequestId:sourceId||null,
+      adId:adId||null,
+      status:'pending',
+      reason:cleanup.reason,
+      createdAt:Date.now()
+    },{merge:true});
+  }
+};
+
+const cleanupMany=async({deleteUrls=[],kind='ad_image',sourceId,adId})=>{
+  for(const deleteUrl of deleteUrls){
+    await cleanupOrQueue({deleteUrl,kind,sourceId,adId});
   }
 };
 
@@ -172,19 +214,13 @@ const approve=async item=>{
           updatedAt:now
         },{merge:true});
 
-        const receiptDeleteUrl=req.receiptDeleteUrl||req.paymentReceiptDeleteUrl||'';
-        const cleanup=await cleanupImgBB(receiptDeleteUrl);
-        if(!cleanup.ok&&receiptDeleteUrl){
-          await setDoc(doc(db,'imgbb_cleanup',item.id),{
-            kind:'receipt',
-            deleteUrl:receiptDeleteUrl,
-            sourceRequestId:item.id,
-            adId:targetId,
-            status:'pending',
-            reason:cleanup.reason,
-            createdAt:Date.now()
-          },{merge:true});
-        }
+        // Уруксат берилгенде чек мындан ары кереги жок — ImgBB cleanup.
+        await cleanupOrQueue({
+          deleteUrl:receiptDeleteUrlOf(req),
+          kind:'receipt',
+          sourceId:item.id,
+          adId:targetId
+        });
         await deleteDoc(requestRef);
         await writeLog(req.requestedPinned?'Закрепленный VIP узартылды':'VIP жарнама узартылды',`${titleOf(item)} · +${daysN} күн`);
         flash(`Мөөнөт +${daysN} күнгө узартылды`);
@@ -207,19 +243,13 @@ const approve=async item=>{
         updatedAt:now
       },{merge:true});
 
-      const receiptDeleteUrl=req.receiptDeleteUrl||req.paymentReceiptDeleteUrl||'';
-      const cleanup=await cleanupImgBB(receiptDeleteUrl);
-      if(!cleanup.ok&&receiptDeleteUrl){
-        await setDoc(doc(db,'imgbb_cleanup',item.id),{
-          kind:'receipt',
-          deleteUrl:receiptDeleteUrl,
-          sourceRequestId:item.id,
-          adId:targetId,
-          status:'pending',
-          reason:cleanup.reason,
-          createdAt:Date.now()
-        },{merge:true});
-      }
+      // Уруксат берилгенде VIP баннердин төлөм чегин тазалоо.
+      await cleanupOrQueue({
+        deleteUrl:receiptDeleteUrlOf(req),
+        kind:'receipt',
+        sourceId:item.id,
+        adId:targetId
+      });
       await deleteDoc(requestRef);
       await writeLog('VIP баннер узартылды',`${titleOf(item)} · +${daysN} күн`);
       flash(`Мөөнөт +${daysN} күнгө узартылды`);
@@ -234,19 +264,13 @@ const approve=async item=>{
       if(daysN<=0)throw new Error('VIP баннердин мөөнөтү көрсөтүлгөн эмес');
       const expiry=Math.max(toMs(source.expiresAt),now)+daysN*24*60*60*1000;
 
-      const receiptDeleteUrl=source.paymentReceiptDeleteUrl||source.receiptDeleteUrl||'';
-      const cleanup=await cleanupImgBB(receiptDeleteUrl);
-      if(!cleanup.ok&&receiptDeleteUrl){
-        await setDoc(doc(db,'imgbb_cleanup',item.id),{
-          kind:'receipt',
-          deleteUrl:receiptDeleteUrl,
-          sourceRequestId:item.id,
-          adId:item.id,
-          status:'pending',
-          reason:cleanup.reason,
-          createdAt:Date.now()
-        },{merge:true});
-      }
+      // Жаңы VIP баннерге уруксат берилгенде төлөм чегин тазалоо.
+      await cleanupOrQueue({
+        deleteUrl:receiptDeleteUrlOf(source),
+        kind:'receipt',
+        sourceId:item.id,
+        adId:item.id
+      });
 
       await setDoc(vipRef,{
         status:'active',
@@ -265,7 +289,53 @@ const approve=async item=>{
     flash(`Ката: ${e.message}`);
   }
 };
-const reject=item=>setDeleteTarget(item); const confirmDelete=async()=>{const item=deleteTarget;if(!item)return;try{await deleteDoc(doc(db,item._collection,item.id));await writeLog('Жарнама өчүрүлдү',titleOf(item));setDeleteTarget(null);flash('Жарнама өчүрүлдү')}catch(e){setDeleteTarget(null);flash(`Ката: ${e.message}`)}};
+const reject=item=>setDeleteTarget(item);
+const confirmDelete=async()=>{
+  const item=deleteTarget;
+  if(!item)return;
+  try{
+    if(item._collection==='vip_requests'){
+      // VIP/узартуу суранычы четке кагылса: негизги жарнамага тийбейбиз,
+      // туура эмес/керексиз төлөм чегин гана ImgBB cleanup'ка жөнөтөбүз.
+      await cleanupOrQueue({
+        deleteUrl:receiptDeleteUrlOf(item),
+        kind:'receipt',
+        sourceId:item.id,
+        adId:item.adId||item.targetAdId||item._linkedAdId||null
+      });
+      await deleteDoc(doc(db,'vip_requests',item.id));
+      await writeLog('VIP суранычы четке кагылды',titleOf(item));
+      setDeleteTarget(null);
+      flash('Сурам өчүрүлдү, төлөм чеги тазалоого жөнөтүлдү');
+      return;
+    }
+
+    // Жарнаманын өзү өчүрүлсө: негизги сүрөттөрү да ImgBB cleanup'ка кетет.
+    // delete_url'дары add.tsx тарабынан imageDeleteUrls талаасында сакталат.
+    await cleanupMany({
+      deleteUrls:deleteUrlsOf(item),
+      kind:'ad_image',
+      sourceId:item.id,
+      adId:item.id
+    });
+
+    // VIP баннердин өзүндө төлөм чеги калып калса аны да тазалайбыз.
+    await cleanupOrQueue({
+      deleteUrl:receiptDeleteUrlOf(item),
+      kind:'receipt',
+      sourceId:item.id,
+      adId:item.id
+    });
+
+    await deleteDoc(doc(db,item._collection,item.id));
+    await writeLog('Жарнама толук өчүрүлдү',titleOf(item));
+    setDeleteTarget(null);
+    flash('Жарнама жана сүрөттөр тазалоого жөнөтүлдү');
+  }catch(e){
+    setDeleteTarget(null);
+    flash(`Ката: ${e.message}`);
+  }
+};
 const block=async()=>{try{await setDoc(doc(db,'users',blockTarget.id),{status:'blocked',blockedUntil:Date.now()+Number(days)*86400000,blockReason:reason,warningCount:increment(1),updatedAt:serverTimestamp()},{merge:true});setBlockTarget(null);flash('Колдонуучу блоктолду')}catch(e){flash(`Ката: ${e.message}`)}};const unblock=async u=>{try{await setDoc(doc(db,'users',u.id),{status:'active',blockedUntil:null,blockReason:null,updatedAt:serverTimestamp()},{merge:true});flash('Аккаунт ачылды')}catch(e){flash(`Ката: ${e.message}`)}};
 return <div className="app">
   <aside>
@@ -274,7 +344,7 @@ return <div className="app">
       <nav>{pages.map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setGlobalSearch('')}}><Icon/>
       <span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}</button>)}</nav><div className="admin">
         <div className="avatar"><UserRound/></div><div><b>Администратор</b><span>{authUser?.email}</span></div>
-        <button className="logout-mini" title="Чыгуу" aria-label="Аккаунттан чыгуу" onClick={()=>signOut(auth)}><LogOut/></button></div></aside><section className="workspace"><div className="topbar"><div className="mobile-brand"><Logo small/><div><b>Админ-панель</b><span>Токтогул Базар</span></div></div><label className="top-search"><Search/><input placeholder="Жарнама же колдонуучу издөө" value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} onFocus={()=>page==='dashboard'&&setPage('ads')}/></label><div className="top-actions"><button className="icon" title="Текшерүүдөгү жарыялар" onClick={()=>setPage('ads')}><Bell/>{pending.length>0&&<i/>}</button><button className="avatar avatar-button" title="Жөндөөлөр" onClick={()=>setPage('settings')}><UserRound/></button><button className="mobile-header-logout" title="Чыгуу" aria-label="Аккаунттан чыгуу" onClick={()=>signOut(auth)}><LogOut/></button></div></div><main>{error&&<div className="error firebase-error"><AlertTriangle/>{error}</div>}{page==='dashboard'&&<Dashboard users={users} ads={ads} vipAds={vipAds} pending={pending} logs={sortedLogs} setPage={setPage}/>} {page==='ads'&&<AdsPage pending={pending} normal={normal} vip={vip} approve={approve} reject={reject} globalSearch={globalSearch}/>} {page==='users'&&<UsersPage users={users} onBlock={setBlockTarget} onUnblock={unblock} globalSearch={globalSearch}/>} {page==='violations'&&<LogsPage title="Эреже бузуулар" logs={reports.length?reports:sortedLogs.filter(l=>/блок|өчүр|эреже/i.test(`${l.action} ${l.details}`))}/>} {page==='logs'&&<LogsPage logs={sortedLogs}/>} {page==='settings'&&<><header className="page-title"><div><h1>Жөндөөлөр</h1><p className="subtitle">Админ аккаунту жана система</p></div></header><div className="settings-grid"><div className="settings-card"><ShieldCheck/><div><h3>Firebase байланыш</h3><p>reklamakg-73685</p><span>Firestore менен реалдуу убакытта байланышкан.</span></div></div><div className="settings-card"><UserRound/><div><h3>Администратор</h3><p>{authUser?.email}</p><span>Чыгуу кнопкасы компьютерде сол панелде, телефондо жогорку header'де жайгашкан.</span></div></div></div></>}</main></section><nav className="bottom-nav">{pages.filter(([id])=>id!=='logs').map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setGlobalSearch('')}}><Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}</button>)}</nav>{notice&&<div className="toast">{notice}</div>}{deleteTarget&&<ConfirmModal title="Жарнаманы өчүрөсүзбү?" text={`«${titleOf(deleteTarget)}» жарнамасы толугу менен өчүрүлөт. Бул аракетти артка кайтарууга болбойт.`} confirmText="Ооба, өчүрүү" cancelText="Жок" onConfirm={confirmDelete} onClose={()=>setDeleteTarget(null)}/>}{blockTarget&&<Modal title="Убактылуу блоктоо" onClose={()=>setBlockTarget(null)}><label>Мөөнөт<select value={days} onChange={e=>setDays(e.target.value)}><option value="1">1 күн</option><option value="3">3 күн</option><option value="7">7 күн</option><option value="30">30 күн</option></select></label><label>Себеби<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><button className="danger" onClick={block}><LockKeyhole/>Блоктоо</button></Modal>}</div>}
+        <button className="logout-mini" title="Чыгуу" aria-label="Аккаунттан чыгуу" onClick={()=>signOut(auth)}><LogOut/></button></div></aside><section className="workspace"><div className="topbar"><div className="mobile-brand"><Logo small/><div><b>Админ-панель</b><span>Токтогул Базар</span></div></div><label className="top-search"><Search/><input placeholder="Жарнама же колдонуучу издөө" value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} onFocus={()=>page==='dashboard'&&setPage('ads')}/></label><div className="top-actions"><button className="icon" title="Текшерүүдөгү жарыялар" onClick={()=>setPage('ads')}><Bell/>{pending.length>0&&<i/>}</button><button className="avatar avatar-button" title="Жөндөөлөр" onClick={()=>setPage('settings')}><UserRound/></button><button className="mobile-header-logout" title="Чыгуу" aria-label="Аккаунттан чыгуу" onClick={()=>signOut(auth)}><LogOut/></button></div></div><main>{error&&<div className="error firebase-error"><AlertTriangle/>{error}</div>}{page==='dashboard'&&<Dashboard users={users} ads={ads} vipAds={vipAds} pending={pending} logs={sortedLogs} setPage={setPage}/>} {page==='ads'&&<AdsPage pending={pending} normal={normal} vip={vip} approve={approve} reject={reject} globalSearch={globalSearch}/>} {page==='users'&&<UsersPage users={users} onBlock={setBlockTarget} onUnblock={unblock} globalSearch={globalSearch}/>} {page==='violations'&&<LogsPage title="Эреже бузуулар" logs={reports.length?reports:sortedLogs.filter(l=>/блок|өчүр|эреже/i.test(`${l.action} ${l.details}`))}/>} {page==='logs'&&<LogsPage logs={sortedLogs}/>} {page==='settings'&&<><header className="page-title"><div><h1>Жөндөөлөр</h1><p className="subtitle">Админ аккаунту жана система</p></div></header><div className="settings-grid"><div className="settings-card"><ShieldCheck/><div><h3>Firebase байланыш</h3><p>reklamakg-73685</p><span>Firestore менен реалдуу убакытта байланышкан.</span></div></div><div className="settings-card"><UserRound/><div><h3>Администратор</h3><p>{authUser?.email}</p><span>Чыгуу кнопкасы компьютерде сол панелде, телефондо жогорку header'де жайгашкан.</span></div></div></div></>}</main></section><nav className="bottom-nav">{pages.filter(([id])=>id!=='logs').map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setGlobalSearch('')}}><Icon/><span>{label}</span>{id==='ads'&&pending.length>0&&<em>{pending.length}</em>}</button>)}</nav>{notice&&<div className="toast">{notice}</div>}{deleteTarget&&<ConfirmModal title={deleteTarget._collection==='vip_requests'?'Сурамды четке кагасызбы?':'Жарнаманы өчүрөсүзбү?'} text={deleteTarget._collection==='vip_requests'?`«${titleOf(deleteTarget)}» боюнча VIP сурамы өчүрүлөт жана төлөм чеги тазаланат. Негизги жарнама өчпөйт.`:`«${titleOf(deleteTarget)}» жарнамасы жана ага тиешелүү сүрөттөр тазаланат. Бул аракетти артка кайтарууга болбойт.`} confirmText={deleteTarget._collection==='vip_requests'?'Ооба, четке кагуу':'Ооба, өчүрүү'} cancelText="Жок" onConfirm={confirmDelete} onClose={()=>setDeleteTarget(null)}/>}{blockTarget&&<Modal title="Убактылуу блоктоо" onClose={()=>setBlockTarget(null)}><label>Мөөнөт<select value={days} onChange={e=>setDays(e.target.value)}><option value="1">1 күн</option><option value="3">3 күн</option><option value="7">7 күн</option><option value="30">30 күн</option></select></label><label>Себеби<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><button className="danger" onClick={block}><LockKeyhole/>Блоктоо</button></Modal>}</div>}
 
 function LoginScreen(){
   const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[loading,setLoading]=useState(false),[message,setMessage]=useState('');
