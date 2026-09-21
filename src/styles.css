@@ -104,3 +104,12 @@ aside{background:linear-gradient(180deg,#fff 0%,#fcfaff 100%);box-shadow:10px 0 
 .confirm-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px}.confirm-actions button{min-height:48px;border-radius:14px;border:0;font-weight:800;font-size:13px;transition:.18s ease}.confirm-actions button:active{transform:scale(.97)}.confirm-cancel{background:#f4f1f7;color:#62596c}.confirm-cancel:hover{background:#ebe6f0}.confirm-yes.danger{background:linear-gradient(135deg,#ef526c,#d92f4e);color:#fff;box-shadow:0 9px 22px rgba(217,47,78,.22)}.confirm-yes.success{background:linear-gradient(135deg,#35b56e,#16834c);color:#fff}
 @keyframes confirmFade{from{opacity:0}to{opacity:1}}@keyframes confirmPop{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}
 @media(max-width:520px){.confirm-backdrop{align-items:end;padding:12px}.confirm-modal{border-radius:25px 25px 20px 20px;padding:24px 18px calc(18px + env(safe-area-inset-bottom))}.confirm-actions{grid-template-columns:1fr 1fr}.confirm-actions button{min-height:50px}}
+
+/* v9 — password visibility control */
+.password-field{position:relative;display:flex;align-items:center;width:100%}
+.password-field input{width:100%;padding-right:52px!important}
+.password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;border-radius:10px;background:transparent;color:#766e80;display:grid;place-items:center;cursor:pointer;z-index:2}
+.password-toggle:hover{background:#eee7f5;color:#7e1ad5}
+.password-toggle:focus-visible{outline:2px solid #9130e9;outline-offset:1px}
+.password-toggle svg{width:19px;height:19px}
+@media(max-width:760px){.password-toggle{width:40px;height:40px;right:6px}}
