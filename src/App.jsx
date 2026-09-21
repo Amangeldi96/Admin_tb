@@ -23,7 +23,14 @@ function Badge({children,tone='purple'}){return <span className={`badge ${tone}`
 function Empty({text}){return <div className="empty"><FileText/><b>{text}</b><span>Азырынча көрсөтүлө турган маалымат жок</span></div>}
 function Stat({icon:Icon,label,value,color}){return <article className="stat"><i className={color}><Icon/></i><div><span>{label}</span><strong>{value}</strong></div></article>}
 const receiptOf=v=>v?.receiptUrl||v?.receiptImage||v?.receiptImageUrl||v?.paymentReceipt||v?.paymentReceiptUrl||v?.checkUrl||v?.checkImage||v?.proofUrl||v?.paymentProof||v?.receipt||'';
-const requestKind=v=>{if(v?._collection==='ads'&&!v?.isVip&&!v?.isPromoted)return {label:'Кадимки жарнама',tone:'green',icon:FileText};const pinned=Boolean(v?.requestedPinned||v?.isPinned||v?.promotionType==='pinned'||v?.vipType==='pinned'||v?.type==='pinned');return pinned?{label:'Закрепленный VIP',tone:'red',icon:Pin}:{label:'VIP жарнама',tone:'orange',icon:Crown}};
+const requestKind=v=>{
+  if(v?._collection==='ads'&&!v?.isVip&&!v?.isPromoted&&v?.promotionStatus!=='active')return {label:'Кадимки жарнама',tone:'green',icon:FileText,isBanner:false};
+  const pinned=Boolean(v?.requestedPinned||v?.isPinned||v?.promotionType==='pinned'||v?.vipType==='pinned'||v?.type==='pinned');
+  const banner=Boolean(v?._collection==='vip_ads'||v?.requestType==='vip_banner'||v?.requestType==='banner'||v?.vipType==='banner'||v?.type==='banner'||v?.isBanner===true||v?.bannerId);
+  if(pinned)return {label:'Закрепленный VIP',tone:'red',icon:Pin,isBanner:false};
+  if(banner)return {label:'VIP баннер',tone:'orange',icon:Crown,isBanner:true};
+  return {label:'VIP жарнама',tone:'orange',icon:Crown,isBanner:false};
+};
 function ImageViewer({images=[],startIndex=0,title='Сүрөт',onClose}){
   const[index,setIndex]=useState(startIndex);
   useEffect(()=>setIndex(startIndex),[startIndex]);
@@ -40,10 +47,10 @@ function AdCard({ad,onApprove,onReject}){
     <article className="ad-card request-card">
       <button type="button" className="ad-image ad-image-button" disabled={!adImages.length} onClick={()=>adImages.length&&openAdImage(0)}>{adImages.length?<><img src={adImages[0]} alt="Жарнаманын сүрөтү"/><span className="image-zoom-hint"><ZoomIn/> Чоңойтуу</span>{adImages.length>1&&<em className="image-count"><ImageIcon/> {adImages.length}</em>}</>:<div className="ad-no-image"><ImageIcon/><span>Сүрөт жок</span></div>}</button>
       <div className="ad-info">
-        <div className="row"><div className="request-badges"><Badge tone={kind.tone}><KindIcon size={13}/>{kind.label}</Badge><Badge>{ad.categoryName||ad.category||'Категориясыз'}</Badge></div><span className="muted">{ago(ad.createdAt||ad.timestamp||ad.requestedAt)}</span></div>
+        <div className="row"><div className="request-badges"><Badge tone={kind.tone}><KindIcon size={13}/>{kind.label}</Badge>{!kind.isBanner&&(ad.categoryName||ad.category)&&<Badge>{ad.categoryName||ad.category}</Badge>}</div><span className="muted">{ago(ad.createdAt||ad.timestamp||ad.requestedAt)}</span></div>
         <h3>{titleOf(ad)}</h3><p>{ad.description||ad.desc||'Сүрөттөмө берилген эмес'}</p>
         {adImages.length>1&&<div className="mini-gallery">{adImages.slice(0,5).map((src,i)=><button key={`${src}-${i}`} onClick={()=>openAdImage(i)}><img src={src} alt=""/>{i===4&&adImages.length>5?<span>+{adImages.length-5}</span>:null}</button>)}</div>}
-        <div className="request-details"><span><b>Жарнама:</b> {kind.label}</span>{(ad.requestedDays||ad.vipDays||ad.durationDays||ad.days)&&<span><b>Мөөнөт:</b> {ad.requestedDays||ad.vipDays||ad.durationDays||ad.days} күн</span>}{(ad.vipTotalCost||ad.totalPrice||ad.amount)&&<span><b>Төлөм:</b> {money(ad.vipTotalCost||ad.totalPrice||ad.amount)}</span>}</div>
+        <div className="request-details">{(ad.requestedDays||ad.vipDays||ad.durationDays||ad.days)&&<span><b>Мөөнөт:</b> {ad.requestedDays||ad.vipDays||ad.durationDays||ad.days} күн</span>}{(ad.vipTotalCost||ad.totalPrice||ad.amount)&&<span><b>Төлөм:</b> {money(ad.vipTotalCost||ad.totalPrice||ad.amount)}</span>}</div>
         <div className="ad-meta"><b>{money(ad.price||ad.adPrice)}</b><span>{ownerOf(ad)}</span></div>
       </div>
       <div className="request-side">
