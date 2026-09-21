@@ -13,6 +13,12 @@ const asDate=v=>{if(!v)return null;if(v?.toDate)return v.toDate();const d=new Da
 const toMs=v=>asDate(v)?.getTime?.()||Number(v)||0;
 const ago=v=>{const d=asDate(v);if(!d)return 'азыр';const m=Math.max(0,Math.floor((Date.now()-d)/60000));return m<1?'азыр':m<60?`${m} мүн. мурун`:m<1440?`${Math.floor(m/60)} саат мурун`:`${Math.floor(m/1440)} күн мурун`};
 const money=v=>v?`${Number(v).toLocaleString('ru-RU')} сом`:'Көрсөтүлгөн эмес';
+const VIP_PRICE_PER_DAY=50;
+const requestDays=v=>Math.max(0,Math.trunc(Number(v?.requestedDays||v?.vipDays||v?.durationDays||v?.days||0)));
+const requestPayment=v=>{
+  const days=requestDays(v);
+  return days>0 ? days*VIP_PRICE_PER_DAY : Number(v?.totalPrice||v?.vipTotalCost||v?.amount||0);
+};
 const titleOf=v=>v?.title||v?.adTitle||v?.name||v?.productName||'Жарнама';
 const ownerOf=v=>v?.userName||v?.ownerName||v?.displayName||v?.authorName||v?.email||v?.userEmail||'Белгисиз';
 const normalizeImage=x=>{if(!x)return '';if(typeof x==='string')return x;if(typeof x==='object')return x.url||x.uri||x.secure_url||x.imageUrl||x.downloadURL||'';return ''};
@@ -65,7 +71,7 @@ function AdCard({ad,onApprove,onReject}){
         <div className="row"><div className="request-badges"><Badge tone={kind.tone}><KindIcon size={13}/>{kind.label}</Badge>{kind.label!=='VIP баннер'&&(ad.categoryName||ad.category)&&<Badge>{ad.categoryName||ad.category}</Badge>}</div><span className="muted">{ago(ad.createdAt||ad.timestamp||ad.requestedAt)}</span></div>
         <h3>{titleOf(ad)}</h3><p>{ad.description||ad.desc||'Сүрөттөмө берилген эмес'}</p>
         {adImages.length>1&&<div className="mini-gallery">{adImages.slice(0,5).map((src,i)=><button key={`${src}-${i}`} onClick={()=>openAdImage(i)}><img src={src} alt=""/>{i===4&&adImages.length>5?<span>+{adImages.length-5}</span>:null}</button>)}</div>}
-        <div className="request-details">{(ad.requestedDays||ad.vipDays||ad.durationDays||ad.days)&&<span><b>Мөөнөт:</b> {ad.requestedDays||ad.vipDays||ad.durationDays||ad.days} күн</span>}{(ad.vipTotalCost||ad.totalPrice||ad.amount)&&<span><b>Төлөм:</b> {money(ad.vipTotalCost||ad.totalPrice||ad.amount)}</span>}</div>
+        <div className="request-details">{requestDays(ad)>0&&<span><b>Мөөнөт:</b> {requestDays(ad)} күн</span>}{requestPayment(ad)>0&&<span><b>Төлөм:</b> {money(requestPayment(ad))}</span>}</div>
         <div className="ad-meta"><b>{money(ad.price||ad.adPrice)}</b><span>{ownerOf(ad)}</span></div>
       </div>
       <div className="request-side">
