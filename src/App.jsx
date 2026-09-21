@@ -126,15 +126,12 @@ const deleteUrlsOf=v=>{
 const receiptDeleteUrlOf=v=>v?.receiptDeleteUrl||v?.paymentReceiptDeleteUrl||v?.checkDeleteUrl||v?.paymentProofDeleteUrl||'';
 
 const cleanupImgBB=async(deleteUrl)=>{
+  // ImgBB расмий API'де программалык DELETE endpoint жок.
+  // Жаңы жарнама сүрөттөрү upload учурунда 90 күндүк,
+  // төлөм чектери 7 күндүк expiration менен жүктөлөт.
+  // Бул функция физикалык delete болду деп жалган ийгилик кайтарбайт.
   if(!deleteUrl)return {ok:false,reason:'delete_url жок'};
-  try{
-    // ImgBB расмий API'де delete endpoint документтелген эмес.
-    // delete_url'ду чакырып көрөбүз; иштебесе cleanupPending сакталат.
-    const res=await fetch(deleteUrl,{method:'GET',redirect:'follow'});
-    return {ok:res.ok,reason:res.ok?'delete_url ачылды':`HTTP ${res.status}`};
-  }catch(e){
-    return {ok:false,reason:e?.message||'ImgBB cleanup error'};
-  }
+  return {ok:false,reason:'ImgBB automatic expiration күтүлүүдө'};
 };
 
 const cleanupOrQueue=async({deleteUrl,kind,sourceId,adId})=>{
@@ -306,7 +303,7 @@ const confirmDelete=async()=>{
       await deleteDoc(doc(db,'vip_requests',item.id));
       await writeLog('VIP суранычы четке кагылды',titleOf(item));
       setDeleteTarget(null);
-      flash('Сурам өчүрүлдү, төлөм чеги тазалоого жөнөтүлдү');
+      flash('Сурам өчүрүлдү. Чек ImgBB\'ден 7 күн ичинде автоматтык өчөт');
       return;
     }
 
@@ -330,7 +327,7 @@ const confirmDelete=async()=>{
     await deleteDoc(doc(db,item._collection,item.id));
     await writeLog('Жарнама толук өчүрүлдү',titleOf(item));
     setDeleteTarget(null);
-    flash('Жарнама жана сүрөттөр тазалоого жөнөтүлдү');
+    flash('Жарнама өчүрүлдү. Сүрөт ImgBB\'ден 90 күндүк мөөнөтү бүткөндө автоматтык өчөт');
   }catch(e){
     setDeleteTarget(null);
     flash(`Ката: ${e.message}`);
