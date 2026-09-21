@@ -100,6 +100,18 @@ const pending=useMemo(()=>[
 ],[ads,vipAds,requests]);
 const normal=ads.filter(a=>a.status==='approved'||(a.status!=='pending'&&!a.isVip&&a.type!=='vip'));const vip=useMemo(()=>[...vipAds.filter(a=>a.status==='active'),...ads.filter(a=>a.promotionStatus==='active'&&toMs(a.vipUntil||a.expiresAt)>Date.now())],[vipAds,ads]);const sortedLogs=[...logs].sort((a,b)=>toMs(b.createdAt)-toMs(a.createdAt));const flash=s=>{setNotice(s);setTimeout(()=>setNotice(''),2800)};
 const writeLog=async(action,details)=>{try{await setDoc(doc(collection(db,'admin_logs')),{action,message:action,details,adminEmail:authUser?.email||ADMIN_EMAILS[0],createdAt:serverTimestamp()})}catch{}};
+const cleanupImgBB=async(deleteUrl)=>{
+  if(!deleteUrl)return {ok:false,reason:'delete_url жок'};
+  try{
+    // ImgBB расмий API'де delete endpoint документтелген эмес.
+    // delete_url'ду чакырып көрөбүз; иштебесе cleanupPending сакталат.
+    const res=await fetch(deleteUrl,{method:'GET',redirect:'follow'});
+    return {ok:res.ok,reason:res.ok?'delete_url ачылды':`HTTP ${res.status}`};
+  }catch(e){
+    return {ok:false,reason:e?.message||'ImgBB cleanup error'};
+  }
+};
+
 const approve=async item=>{
   try{
     if(item._collection==='ads'){
@@ -137,7 +149,11 @@ const approve=async item=>{
         // Так эреже: учурдагы VIP мөөнөтү бүтө элек болсо ошого,
         // бүтүп калса бүгүнкү убакытка requestedDays толугу менен кошулат.
         const currentVipUntil=toMs(adData.vipUntil);
-        const expiry=Math.max(currentVipUntil,now)+added;
+        const vipExpiry=Math.max(currentVipUntil,now)+added;
+
+        // VIP сатып алынган күн жарнаманын өз мөөнөтүнө да толугу менен кошулат.
+        const currentAdExpiry=toMs(adData.expiresAt);
+        const adExpiry=Math.max(currentAdExpiry,now)+added;
 
         await setDoc(adRef,{
           promotionStatus:'active',
@@ -145,10 +161,24 @@ const approve=async item=>{
           isPinned:Boolean(req.requestedPinned),
           promotionType:req.requestedPinned?'pinned':'rotating',
           promotionStartedAt:adData.promotionStartedAt||now,
-          vipUntil:expiry,
+          vipUntil:vipExpiry,
+          expiresAt:adExpiry,
           updatedAt:now
         },{merge:true});
 
+        const receiptDeleteUrl=req.receiptDeleteUrl||req.paymentReceiptDeleteUrl||'';
+        const cleanup=await cleanupImgBB(receiptDeleteUrl);
+        if(!cleanup.ok&&receiptDeleteUrl){
+          await setDoc(doc(db,'imgbb_cleanup',item.id),{
+            kind:'receipt',
+            deleteUrl:receiptDeleteUrl,
+            sourceRequestId:item.id,
+            adId:targetId,
+            status:'pending',
+            reason:cleanup.reason,
+            createdAt:Date.now()
+          },{merge:true});
+        }
         await deleteDoc(requestRef);
         await writeLog(req.requestedPinned?'Закрепленный VIP узартылды':'VIP жарнама узартылды',`${titleOf(item)} · +${daysN} күн`);
         flash(`Мөөнөт +${daysN} күнгө узартылды`);
@@ -171,6 +201,19 @@ const approve=async item=>{
         updatedAt:now
       },{merge:true});
 
+      const receiptDeleteUrl=req.receiptDeleteUrl||req.paymentReceiptDeleteUrl||'';
+      const cleanup=await cleanupImgBB(receiptDeleteUrl);
+      if(!cleanup.ok&&receiptDeleteUrl){
+        await setDoc(doc(db,'imgbb_cleanup',item.id),{
+          kind:'receipt',
+          deleteUrl:receiptDeleteUrl,
+          sourceRequestId:item.id,
+          adId:targetId,
+          status:'pending',
+          reason:cleanup.reason,
+          createdAt:Date.now()
+        },{merge:true});
+      }
       await deleteDoc(requestRef);
       await writeLog('VIP баннер узартылды',`${titleOf(item)} · +${daysN} күн`);
       flash(`Мөөнөт +${daysN} күнгө узартылды`);
@@ -185,11 +228,27 @@ const approve=async item=>{
       if(daysN<=0)throw new Error('VIP баннердин мөөнөтү көрсөтүлгөн эмес');
       const expiry=Math.max(toMs(source.expiresAt),now)+daysN*24*60*60*1000;
 
+      const receiptDeleteUrl=source.paymentReceiptDeleteUrl||source.receiptDeleteUrl||'';
+      const cleanup=await cleanupImgBB(receiptDeleteUrl);
+      if(!cleanup.ok&&receiptDeleteUrl){
+        await setDoc(doc(db,'imgbb_cleanup',item.id),{
+          kind:'receipt',
+          deleteUrl:receiptDeleteUrl,
+          sourceRequestId:item.id,
+          adId:item.id,
+          status:'pending',
+          reason:cleanup.reason,
+          createdAt:Date.now()
+        },{merge:true});
+      }
+
       await setDoc(vipRef,{
         status:'active',
         isVip:true,
         expiresAt:expiry,
         vipDays:Math.max(0,Number(source.vipDays||0))+daysN,
+        paymentReceiptImage:null,
+        paymentReceiptDeleteUrl:null,
         updatedAt:now
       },{merge:true});
       await writeLog('VIP баннер кабыл алынды',`${titleOf(item)} · +${daysN} күн`);
