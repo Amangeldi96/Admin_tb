@@ -113,3 +113,6 @@ aside{background:linear-gradient(180deg,#fff 0%,#fcfaff 100%);box-shadow:10px 0 
 .password-toggle:focus-visible{outline:2px solid #9130e9;outline-offset:1px}
 .password-toggle svg{width:19px;height:19px}
 @media(max-width:760px){.password-toggle{width:40px;height:40px;right:6px}}
+
+/* Settings cleanup controls */
+.cleanup-card .cleanup-button{margin-top:13px;border:0;border-radius:11px;padding:10px 13px;display:flex;align-items:center;gap:7px;background:#f3e9ff;color:#7420cf;font-weight:800}.cleanup-card .cleanup-button svg{width:17px}.cleanup-card .cleanup-button.danger{width:auto;background:#ffe7ec;color:#d73553}.danger-cleanup>svg{color:#e34862}@media(max-width:760px){.cleanup-card .cleanup-button,.cleanup-card .cleanup-button.danger{width:100%;justify-content:center;min-height:44px}}
