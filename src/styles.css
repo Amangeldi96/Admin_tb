@@ -127,3 +127,32 @@ aside{background:linear-gradient(180deg,#fff 0%,#fcfaff 100%);box-shadow:10px 0 
   .logout-settings-card{width:100%}
   .settings-logout-button{width:100%;min-height:46px}
 }
+
+/* Final settings behavior:
+   Desktop keeps logout in sidebar and hides logout from Settings.
+   Mobile replaces header logout with Settings and shows logout inside Settings. */
+.logout-settings-card{display:none!important}
+.mobile-header-settings{background:#f3eaff!important;color:#8125dd!important}
+
+/* Styled confirmation dialog for destructive/permission-like actions */
+.confirm-backdrop{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px;background:rgba(25,18,34,.62);backdrop-filter:blur(7px)}
+.confirm-modal{width:min(410px,100%);background:#fff;border:1px solid #eee7f5;border-radius:24px;padding:25px;text-align:center;box-shadow:0 24px 70px rgba(47,20,69,.28);animation:confirmPop .2s ease}
+.confirm-icon{width:58px;height:58px;margin:0 auto 14px;border-radius:18px;display:grid;place-items:center}
+.confirm-icon svg{width:27px}
+.confirm-icon.danger{background:#ffe8ed;color:#d93453}
+.confirm-modal h3{margin:0;font-size:20px;color:#211829}
+.confirm-modal p{margin:10px auto 21px;max-width:330px;color:#81798a;font-size:13px;line-height:1.55}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.confirm-actions button{min-height:47px;border:0;border-radius:13px;font-weight:800}
+.confirm-cancel{background:#f3eff7;color:#62596b}
+.confirm-yes.danger{background:linear-gradient(135deg,#ef4967,#d92e50);color:#fff;box-shadow:0 9px 22px rgba(217,46,80,.2)}
+@keyframes confirmPop{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+
+@media(max-width:760px){
+  .logout-settings-card{display:flex!important}
+  .mobile-header-settings{display:grid!important}
+  .confirm-modal{border-radius:22px;padding:22px 18px}
+  .confirm-actions{grid-template-columns:1fr}
+  .confirm-yes{grid-row:1}
+  .confirm-cancel{grid-row:2}
+}
