@@ -33,7 +33,7 @@ function Logo({small=false,className=''}){return <div className={`logo ${small?'
 function Badge({children,tone='purple'}){return <span className={`badge ${tone}`}>{children}</span>}
 function Empty({text}){return <div className="empty"><FileText/><b>{text}</b><span>Азырынча көрсөтүлө турган маалымат жок</span></div>}
 function Stat({icon:Icon,label,value,color}){return <article className="stat"><i className={color}><Icon/></i><div><span>{label}</span><strong>{value}</strong></div></article>}
-const receiptOf=v=>v?.receiptUrl||v?.receiptImage||v?.receiptImageUrl||v?.paymentReceipt||v?.paymentReceiptUrl||v?.checkUrl||v?.checkImage||v?.proofUrl||v?.paymentProof||v?.receipt||'';
+const receiptOf=v=>v?.receiptUrl||v?.receiptImage||v?.receiptImageUrl||v?.paymentReceipt||v?.paymentReceiptUrl||v?.paymentReceiptImage||v?.checkUrl||v?.checkImage||v?.proofUrl||v?.paymentProof||v?.receipt||v?.receiptUri||v?.receiptURL||'';
 const requestKind=v=>{
   if(v?._collection==='ads'&&!v?.isVip&&!v?.isPromoted)
     return {label:'Кадимки жарнама',tone:'green',icon:FileText};
@@ -80,7 +80,7 @@ function AdCard({ad,onApprove,onReject}){
         <div className="ad-meta"><b>{money(ad.price||ad.adPrice)}</b><span>{ownerOf(ad)}</span></div>
       </div>
       <div className="request-side">
-        {ad._collection==='vip_requests'&&(receipt?<button type="button" className="receipt-card" onClick={openReceipt}><div className="receipt-thumb"><img src={receipt} alt="Төлөм чеги"/><span><ZoomIn/>Чоңойтуу</span></div><div className="receipt-caption"><Receipt/><div><b>Төлөм чеги</b><small>Басып чоңойтуңуз</small></div></div></button>:<div className="receipt-empty"><Receipt/><b>Чек жок</b><small>Сүрөт келген эмес</small></div>)}
+        {(ad._collection==='vip_requests'||ad._collection==='vip_ads')&&(receipt?<button type="button" className="receipt-card" onClick={openReceipt}><div className="receipt-thumb"><img src={receipt} alt="Төлөм чеги"/><span><ZoomIn/>Чоңойтуу</span></div><div className="receipt-caption"><Receipt/><div><b>Төлөм чеги</b><small>Басып чоңойтуңуз</small></div></div></button>:<div className="receipt-empty"><Receipt/><b>Чек жок</b><small>Сүрөт келген эмес</small></div>)}
         <div className="ad-actions">{ad._pending&&<button className="approve" onClick={()=>onApprove(ad)}><Check/>Уруксат</button>}<button className="reject" onClick={()=>onReject(ad)}><Trash2/>Өчүрүү</button></div>
       </div>
     </article>
